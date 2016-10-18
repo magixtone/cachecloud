@@ -60,6 +60,27 @@ function checkAppConfig(){
 	return true;
 }
 
+//检查配置项
+function checkInstanceConfig(){
+	//配置项
+	var instanceConfigKey = document.getElementById("instanceConfigKey");
+	if(instanceConfigKey.value == ""){
+		alert("配置项不能为空");
+		instanceConfigKey.focus();
+		return false;
+	}
+	
+	//配置值
+	var instanceConfigValue = document.getElementById("instanceConfigValue");
+	if(instanceConfigValue.value == ""){
+		alert("配置值不能为空");
+		instanceConfigValue.focus();
+		return false;
+	}
+	return true;
+}
+
+
 //检查扩容配置
 function checkAppScaleText(){
 	var appScaleText = document.getElementById("appScaleText");
@@ -71,16 +92,72 @@ function checkAppScaleText(){
 	return true;
 }
 
+function startShowDeployLabel(){
+	var startDeployLabel = document.getElementById("startDeployLabel");
+	startDeployLabel.innerHTML += '.';
+}
+
 //检查应用部署配置
 function checkAppDeployText(){
 	var appDeployText = document.getElementById("appDeployText");
 	if(appDeployText.value == ""){
-		alert("配置不能为空");
+		alert("应用部署信息不能为空");
 		appDeployText.focus();
 		return false;
 	}
-	document.getElementById("appDeployBtn").disabled = true;
-	return true;
+	var appAuditId = document.getElementById("appAuditId");
+	$.get(
+		'/manage/app/appDeployCheck.json',
+		{
+			appAuditId: appAuditId.value,
+			appDeployText: appDeployText.value
+		},
+        function(data){
+			var status = data.status;
+			alert(data.message);
+			if (status == 1) {
+				var appDeployBtn = document.getElementById("appDeployBtn");
+				appDeployBtn.disabled = false;
+	    		
+	    		var appCheckBtn = document.getElementById("appCheckBtn");
+	    		appCheckBtn.disabled = true;
+	    		
+	    		appDeployText.disabled = true;
+			} else {
+				appDeployText.focus();
+			}
+        }
+     );
+}
+
+function addAppDeployText() {
+	var appDeployBtn = document.getElementById("appDeployBtn");
+	appDeployBtn.disabled = true;
+	
+	var appDeployText = document.getElementById("appDeployText");
+	var appAuditId = document.getElementById("appAuditId");
+	
+	var startDeployLabel = document.getElementById("startDeployLabel");
+	startDeployLabel.innerHTML = '正在部署,请等待.';
+	
+	$.get(
+		'/manage/app/addAppDeploy.json',
+		{
+			appAuditId: appAuditId.value,
+			appDeployText: appDeployText.value
+		},
+        function(data){
+			var status = data.status;
+			if (status == 1) {
+				alert("应用部署成功,确认后将跳转到审核界面,点击[通过]按钮即可!");
+			} else {
+				alert("应用部署失败,请查看系统日志确认相关原因!");
+			}
+			window.location.href="/manage/app/auditList";
+        }
+     );
+	//展示简单的进度条
+	setInterval(startShowDeployLabel,500);
 }
 
 //添加分片验证

@@ -63,13 +63,13 @@ function search() {
                 </tr>
                 </thead>
                 <tbody>
-	                <c:forEach items="${instaceSlowLogMap}" var="item" varStatus="stats">
+	                <c:forEach items="${appInstanceSlowLogCountMap}" var="item" varStatus="stats">
 	                    <tr>
 	                        <td>${stats.index + 1}</td>
 	                        <td>
 	                            <a href="#${stats.index + 1}">${item.key}</a>
 	                        </td>
-	                        <td>${fn:length(item.value)}</td>
+	                        <td>${item.value}</td>
 	                    </tr>
 	                </c:forEach>
                 </tbody>
@@ -89,7 +89,7 @@ function search() {
 		                <td>ip</td>
 		                <td>port</td>
 		                <td>慢查询id</td>
-		                <td>耗时(单位:微妙)</td>
+		                <td>耗时(单位:微秒)</td>
 		                <td>命令</td>
 		                <td>发生时间</td>
 		            </tr>

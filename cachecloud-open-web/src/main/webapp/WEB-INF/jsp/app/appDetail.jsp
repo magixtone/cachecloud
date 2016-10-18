@@ -52,6 +52,19 @@
                     <td>从节点数</td>
                     <td>${appDetail.slaveNum}</td>
                 </tr>
+                <tr>
+                    <td>appKey</td>
+                    <td>
+                    <c:choose>
+                    	<c:when test="${appDetail.appDesc.appKey == null || appDetail.appDesc.appKey == ''}">
+                    		暂无
+                    	</c:when>
+                    	<c:otherwise>
+                    		${appDetail.appDesc.appKey}
+                    	</c:otherwise>
+                    </c:choose>
+                    </td>
+                </tr>
                 </tbody>
             </table>
         </div>
@@ -74,6 +87,12 @@
 	                    <td>1</td>
 	                    <td>内存使用率大于</td>
 	                    <td>${appDetail.appDesc.memAlertValue}%</td>
+	                    <td>每20分钟</td>
+	                </tr>
+	                 <tr>
+	                    <td>2</td>
+	                    <td>客户端连接数大于</td>
+	                    <td>${appDetail.appDesc.clientConnAlertValue}</td>
 	                    <td>每20分钟</td>
 	                </tr>
                 </tbody>
@@ -129,7 +148,7 @@
    		
    			<button class="col-md-3" type="button" class="btn default" data-target="#appAddUserModal" data-toggle="modal">添加报警接收用户</button>
    				<div class="col-md-2"></div>
-   			<button class="col-md-3" type="button" class="btn default" data-target="#appConfigChangeModal" data-toggle="modal">应用报警配置</button>
+   			<button class="col-md-3" type="button" class="btn default" data-target="#appAlertConfigModal" data-toggle="modal">应用报警配置</button>
    		</div>
     </div>
     <br/><br/><br/>
@@ -181,7 +200,7 @@
 </div>
 
 
-<div id="appConfigChangeModal" class="modal fade" tabindex="-1" data-width="400">
+<div id="appAlertConfigModal" class="modal fade" tabindex="-1" data-width="400">
 	<div class="modal-dialog">
 		<div class="modal-content">
 		
@@ -200,10 +219,19 @@
 								<div class="form-group">
 									<label class="control-label col-md-3">内存报警阀值:</label>
 									<div class="col-md-7">
-										<input type="text" name="memAlertValue" id="memAlertValue" placeholder="内存报警阀值" class="form-control" onchange="testisNum(this.id)">
+										<input type="text" name="memAlertValue" value="${appDetail.appDesc.memAlertValue}" id="memAlertValue" placeholder="内存报警阀值" class="form-control" onchange="testisNum(this.id)">
 										<span class="help-block">例如:如果想内存使用率超过90%报警，填写90<br/><font color="red">(如果不需要报警请填写100以上的数字)</font></span>
 									</div>
 								</div>
+								
+								<div class="form-group">
+									<label class="control-label col-md-3">客户端连接数报警阀值:</label>
+									<div class="col-md-7">
+										<input type="text" name="clientConnAlertValue" value="${appDetail.appDesc.clientConnAlertValue}" id="clientConnAlertValue" placeholder="客户端连接数报警阀值" class="form-control" onchange="testisNum(this.id)">
+										<span class="help-block">例如:如果想客户端连接数率超过2000报警，填写2000</span>
+									</div>
+								</div>
+								
 							</div>
 							<!-- form-body 结束 -->
 						</div>

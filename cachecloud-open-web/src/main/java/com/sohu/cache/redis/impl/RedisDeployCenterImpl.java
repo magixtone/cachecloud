@@ -8,14 +8,12 @@ import com.sohu.cache.entity.AppDesc;
 import com.sohu.cache.entity.InstanceInfo;
 import com.sohu.cache.entity.MachineInfo;
 import com.sohu.cache.machine.MachineCenter;
+import com.sohu.cache.protocol.MachineProtocol;
 import com.sohu.cache.protocol.RedisProtocol;
 import com.sohu.cache.redis.RedisCenter;
 import com.sohu.cache.redis.RedisClusterNode;
+import com.sohu.cache.redis.RedisConfigTemplateService;
 import com.sohu.cache.redis.RedisDeployCenter;
-import com.sohu.cache.redis.enums.RedisClusterConfigEnum;
-import com.sohu.cache.redis.enums.RedisConfigEnum;
-import com.sohu.cache.redis.enums.RedisSentinelConfigEnum;
-import com.sohu.cache.schedule.SchedulerCenter;
 import com.sohu.cache.util.ConstUtils;
 import com.sohu.cache.util.IdempotentConfirmer;
 import com.sohu.cache.util.TypeUtil;
@@ -49,21 +47,8 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
     private RedisCenter redisCenter;
 
     private AppDao appDao;
-
-    private SchedulerCenter schedulerCenter;
-
-    private static final List<String> SENTINEL_LIST = new ArrayList<String>();
-
-    static {
-        ResourceBundle resourceBundle = ResourceBundle.getBundle("application");
-        String sentinels = resourceBundle.getString("sentinel.host.list");
-        String[] hosts = sentinels.split(ConstUtils.COMMA);
-        for (String host : hosts) {
-            if (StringUtils.isNotBlank(host)) {
-                SENTINEL_LIST.add(host);
-            }
-        }
-    }
+    
+    private RedisConfigTemplateService redisConfigTemplateService;
 
     @Override
     public boolean deployClusterInstance(long appId, List<RedisClusterNode> clusterNodes, int maxMemory) {
@@ -117,11 +102,11 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
                 Jedis master = entry.getKey();
                 Jedis slave = entry.getValue();
                 //保存实例信息 & 触发收集
-                InstanceInfo instanceInfo = saveInstance(appId, 0, master.getClient().getHost(),
+                saveInstance(appId, master.getClient().getHost(),
                         master.getClient().getPort(), maxMemory, ConstUtils.CACHE_TYPE_REDIS_CLUSTER, "");
                 redisCenter.deployRedisCollection(appId, master.getClient().getHost(), master.getClient().getPort());
                 if (slave != null) {
-                    saveInstance(appId, instanceInfo.getId(), slave.getClient().getHost(), slave.getClient().getPort(),
+                    saveInstance(appId, slave.getClient().getHost(), slave.getClient().getPort(),
                             maxMemory, ConstUtils.CACHE_TYPE_REDIS_CLUSTER, "");
                     redisCenter.deployRedisCollection(appId, slave.getClient().getHost(), slave.getClient().getPort());
                 }
@@ -288,7 +273,7 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
     }
 
     @Override
-    public boolean deploySentinelInstance(long appId, String masterHost, String slaveHost, int maxMemory) {
+    public boolean deploySentinelInstance(long appId, String masterHost, String slaveHost, int maxMemory, List<String> sentinelList) {
         if (!isExist(appId)) {
             return false;
         }
@@ -319,15 +304,15 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
         }
 
         //运行sentinel实例组
-        boolean isRunSentinel = runSentinelGroup(masterHost, masterPort, appId);
+        boolean isRunSentinel = runSentinelGroup(sentinelList, masterHost, masterPort, appId);
         if (!isRunSentinel) {
             return false;
         }
 
         //写入instanceInfo 信息
-        InstanceInfo masterInfo = saveInstance(appId, 0, masterHost, masterPort, maxMemory,
+        saveInstance(appId, masterHost, masterPort, maxMemory,
                 ConstUtils.CACHE_REDIS_STANDALONE, "");
-        saveInstance(appId, masterInfo.getId(), slaveHost, slavePort, maxMemory, ConstUtils.CACHE_REDIS_STANDALONE, "");
+        saveInstance(appId, slaveHost, slavePort, maxMemory, ConstUtils.CACHE_REDIS_STANDALONE, "");
 
         //启动监控trigger
         boolean isMasterDeploy = redisCenter.deployRedisCollection(appId, masterHost, masterPort);
@@ -360,7 +345,7 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
         }
 
         //写入instanceInfo 信息
-        InstanceInfo instanceInfo = saveInstance(appId, 0, host, port, maxMemory, ConstUtils.CACHE_REDIS_STANDALONE,
+        saveInstance(appId, host, port, maxMemory, ConstUtils.CACHE_REDIS_STANDALONE,
                 "");
 
         //启动监控trigger
@@ -371,7 +356,7 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
         return true;
     }
 
-    private InstanceInfo saveInstance(long appId, int parentId, String host, int port, int maxMemory, int type,
+    private InstanceInfo saveInstance(long appId, String host, int port, int maxMemory, int type,
             String cmd) {
         InstanceInfo instanceInfo = new InstanceInfo();
         instanceInfo.setAppId(appId);
@@ -382,15 +367,14 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
         instanceInfo.setStatus(InstanceStatusEnum.GOOD_STATUS.getStatus());
         instanceInfo.setPort(port);
         instanceInfo.setType(type);
-        instanceInfo.setParentId(parentId);
         instanceInfo.setCmd(cmd);
         instanceInfo.setIp(host);
         instanceDao.saveInstance(instanceInfo);
         return instanceInfo;
     }
 
-    private boolean runSentinelGroup(String masterHost, int masterPort, long appId) {
-        for (String sentinelHost : SENTINEL_LIST) {
+    private boolean runSentinelGroup(List<String> sentinelList, String masterHost, int masterPort, long appId) {
+        for (String sentinelHost : sentinelList) {
             boolean isRun = runSentinel(sentinelHost, getMasterName(masterHost, masterPort), masterHost, masterPort,
                     appId);
             if (!isRun) {
@@ -433,10 +417,10 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
         }
         if (isCluster) {
             //删除cluster节点配置
-            String nodesFile = String.format("rm -rf /opt/cachecloud/data/nodes-%s.conf", port);
-            boolean isDelete = machineCenter.startProcessAtPort(host, port, nodesFile);
-            if (isDelete) {
-                logger.warn("{} to {}:{}", nodesFile, host, port);
+            String deleteNodeShell = String.format("rm -rf %s/nodes-%s.conf", MachineProtocol.DATA_DIR, port);
+            String deleteNodeResult = machineCenter.executeShell(host, deleteNodeShell);
+            if (!ConstUtils.INNER_ERROR.equals(deleteNodeResult)) {
+                logger.warn("runDeleteNodeShell={} at host {}", deleteNodeShell, host);
             }
         }
         //启动实例
@@ -514,7 +498,7 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
             logger.warn("runSentinel-fallback : redis-cli -h {} -p {} shutdown", sentinelHost, sentinelPort);
         }
         //save sentinel
-        saveInstance(appId, 0, sentinelHost, sentinelPort, 0, ConstUtils.CACHE_REDIS_SENTINEL,
+        saveInstance(appId, sentinelHost, sentinelPort, 0, ConstUtils.CACHE_REDIS_SENTINEL,
                 getMasterName(masterHost, masterPort));
         return true;
     }
@@ -526,59 +510,48 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
      * @param maxMemory
      * @return
      */
-    private List<String> handleCommonConfig(int port, int maxMemory) {
-        List<String> configs = new ArrayList<String>();
-        for (RedisConfigEnum config : RedisConfigEnum.values()) {
-            if (RedisConfigEnum.MAXMEMORY.equals(config)) {
-                configs.add(config.getKey() + " " + maxMemory + "mb");
-            } else if (RedisConfigEnum.DBFILENAME.equals(config)
-                    || RedisConfigEnum.APPENDFILENAME.equals(config)) {
-                configs.add(config.getKey() + " " + String.format(config.getValue(), port));
-            } else if (RedisConfigEnum.PORT.equals(config)) {
-                configs.add(config.getKey() + " " + port);
-            } else if (RedisConfigEnum.AUTO_AOF_REWRITE_PERCENTAGE.equals(config)) {
-                //随机比例 auto-aof-rewrite-percentage
-                Random random = new Random();
-                configs.add(config.getKey() + " " + (69 + random.nextInt(30)));
-            } else {
-                configs.add(config.getKey() + " " + config.getValue());
-            }
+    public List<String> handleCommonConfig(int port, int maxMemory) {
+        List<String> configs = null;
+        try {
+            configs = redisConfigTemplateService.handleCommonConfig(port, maxMemory);
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+        }
+        if (CollectionUtils.isEmpty(configs)) {
+            configs = redisConfigTemplateService.handleCommonDefaultConfig(port, maxMemory);
         }
         return configs;
     }
 
     private List<String> handleSentinelConfig(String masterName, String host, int port, int sentinelPort) {
-        List<String> configs = new ArrayList<String>();
-        configs.add(RedisSentinelConfigEnum.PORT.getKey() + " " + sentinelPort);
-        configs.add(RedisSentinelConfigEnum.DIR.getKey() + " " + RedisSentinelConfigEnum.DIR.getValue());
-        String monitor = String.format("%s %s %d %d", masterName, host, port, 1);
-        configs.add(RedisSentinelConfigEnum.MONITOR.getKey() + " " + monitor);
-        configs.add(RedisSentinelConfigEnum.DOWN_AFTER_MILLISECONDS.getKey() + " " + String
-                .format(RedisSentinelConfigEnum.DOWN_AFTER_MILLISECONDS.getValue(), masterName));
-        configs.add(RedisSentinelConfigEnum.FAILOVER_TIMEOUT.getKey() + " " + String
-                .format(RedisSentinelConfigEnum.FAILOVER_TIMEOUT.getValue(), masterName));
-        configs.add(RedisSentinelConfigEnum.PARALLEL_SYNCS.getKey() + " " + String
-                .format(RedisSentinelConfigEnum.PARALLEL_SYNCS.getValue(), masterName));
+        List<String> configs = null;
+        try {
+            configs = redisConfigTemplateService.handleSentinelConfig(masterName, host, port, sentinelPort);
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+        }
+        if (CollectionUtils.isEmpty(configs)) {
+            configs = redisConfigTemplateService.handleSentinelDefaultConfig(masterName, host, port, sentinelPort);
+        }
+        return configs;
+    }
+
+    private List<String> handleClusterConfig(int port) {
+        List<String> configs = null;
+        try {
+            configs = redisConfigTemplateService.handleClusterConfig(port);
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+        }
+        if (CollectionUtils.isEmpty(configs)) {
+            configs = redisConfigTemplateService.handleClusterDefaultConfig(port);
+        }
         return configs;
     }
 
     private String getMasterName(String host, int port) {
         String masterSentinelName = String.format("sentinel-%s-%s", host, port);
         return masterSentinelName;
-    }
-
-    private List<String> handleClusterConfig(int port) {
-        List<String> configs = new ArrayList<String>();
-        for (RedisClusterConfigEnum config : RedisClusterConfigEnum.values()) {
-            if (config.equals(RedisClusterConfigEnum.CLUSTER_CONFIG_FILE)) {
-                configs.add(RedisClusterConfigEnum.CLUSTER_CONFIG_FILE.getKey() + " "
-                        + String.format(RedisClusterConfigEnum.CLUSTER_CONFIG_FILE.getValue(), port));
-            } else {
-                configs.add(config.getKey() + " "
-                        + config.getValue());
-            }
-        }
-        return configs;
     }
 
     private boolean isRun(String host, int port) {
@@ -627,6 +600,10 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
             }
             //忽略sentinel
             if (TypeUtil.isRedisSentinel(type)) {
+                continue;
+            }
+            //忽略下线
+            if (instance.isOffline()) {
                 continue;
             }
             String host = instance.getIp();
@@ -820,7 +797,7 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
         }
         
         // 7.保存实例信息、并开启收集信息
-        saveInstance(appId, 0, newMasterHost, newMasterPort, healthyMasterMem, ConstUtils.CACHE_TYPE_REDIS_CLUSTER, "");
+        saveInstance(appId, newMasterHost, newMasterPort, healthyMasterMem, ConstUtils.CACHE_TYPE_REDIS_CLUSTER, "");
         redisCenter.deployRedisCollection(appId, newMasterHost, newMasterPort);
         
         // 休息一段时间，同步clusterNodes信息
@@ -923,10 +900,10 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
 
         //写入instanceInfo 信息
         if (TypeUtil.isRedisCluster(type)) {
-            saveInstance(appId, instanceId, slaveHost, slavePort, instanceInfo.getMem(),
+            saveInstance(appId, slaveHost, slavePort, instanceInfo.getMem(),
                     ConstUtils.CACHE_TYPE_REDIS_CLUSTER, "");
         } else {
-            saveInstance(appId, instanceId, slaveHost, slavePort, instanceInfo.getMem(),
+            saveInstance(appId, slaveHost, slavePort, instanceInfo.getMem(),
                     ConstUtils.CACHE_REDIS_STANDALONE, "");
         }
         //启动监控trigger
@@ -1066,7 +1043,9 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
      */
     private boolean copyCommonConfig(String sourceHost, int sourcePort, String targetHost, int targetPort) {
         String[] compareConfigs = new String[] {"maxmemory-policy", "maxmemory", "cluster-node-timeout",
-                "cluster-require-full-coverage", "repl-backlog-size", "appendonly"};
+                "cluster-require-full-coverage", "repl-backlog-size", "appendonly", "hash-max-ziplist-entries",
+                "hash-max-ziplist-value", "list-max-ziplist-entries", "list-max-ziplist-value", "set-max-intset-entries",
+                "zset-max-ziplist-entries", "zset-max-ziplist-value"};
         try {
             for (String config : compareConfigs) {
                 String sourceValue = getConfigValue(sourceHost, sourcePort, config);
@@ -1122,8 +1101,7 @@ public class RedisDeployCenterImpl implements RedisDeployCenter {
         this.appDao = appDao;
     }
 
-    public void setSchedulerCenter(SchedulerCenter schedulerCenter) {
-        this.schedulerCenter = schedulerCenter;
+    public void setRedisConfigTemplateService(RedisConfigTemplateService redisConfigTemplateService) {
+        this.redisConfigTemplateService = redisConfigTemplateService;
     }
-
 }

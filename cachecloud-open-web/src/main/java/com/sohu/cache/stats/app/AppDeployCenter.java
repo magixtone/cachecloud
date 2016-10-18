@@ -1,5 +1,6 @@
 package com.sohu.cache.stats.app;
 
+import com.sohu.cache.constant.DataFormatCheckResult;
 import com.sohu.cache.entity.AppDesc;
 import com.sohu.cache.entity.AppUser;
 import com.sohu.cache.redis.ReshardProcess;
@@ -34,6 +35,14 @@ public interface AppDeployCenter {
 
 
     /**
+     * 为应用分配的资源格式检测
+     * @param appAuditId
+     * @param appDeployText
+     * @return
+     */
+    public DataFormatCheckResult checkAppDeployDetail(Long appAuditId, String appDeployText);
+
+    /**
      * 下线应用
      *
      * @param appId
@@ -42,7 +51,7 @@ public interface AppDeployCenter {
     public boolean offLineApp(Long appId);
 
     /**
-     * 修改应用下节点配置,仅限redis类型
+     * 修改应用下节点配置
      *
      * @param appId
      * @param appAuditId
@@ -56,6 +65,7 @@ public interface AppDeployCenter {
      * 垂直扩展
      *
      * @param appId
+     * @param appAuditId
      * @param memory 单位MB
      * @return
      */
@@ -66,8 +76,8 @@ public interface AppDeployCenter {
      *
      * @param appId
      * @param host
-     * @param port       单位MB
-     * @param appAuditId 审核id
+     * @param por
+     * @param appAuditId
      * @return
      */
     public boolean horizontalExpansion(Long appId, String host, int port, Long appAuditId);
@@ -108,4 +118,5 @@ public interface AppDeployCenter {
      * @return
      */
     public boolean cleanAppData(long appId, AppUser appUser);
+
 }

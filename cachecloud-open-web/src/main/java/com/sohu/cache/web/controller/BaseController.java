@@ -2,6 +2,7 @@ package com.sohu.cache.web.controller;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -10,15 +11,13 @@ import java.util.Set;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 
-import com.sohu.cache.util.ConstUtils;
 import com.sohu.cache.web.service.AppService;
+import com.sohu.cache.web.service.UserLoginStatusService;
 import com.sohu.cache.web.service.UserService;
 
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.exception.ExceptionUtils;
-import org.apache.commons.lang.math.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ui.Model;
@@ -44,6 +43,8 @@ public class BaseController {
     protected AppService appService;
     
     protected MachineCenter machineCenter;
+    
+    protected UserLoginStatusService userLoginStatusService;
 
     public void setUserService(UserService userService) {
         this.userService = userService;
@@ -57,12 +58,21 @@ public class BaseController {
         this.machineCenter = machineCenter;
     }
 
-    public AppUser getUserInfo(HttpServletRequest request) {
-        HttpSession session = request.getSession(true);
-        Object object = session.getAttribute(ConstUtils.LOGIN_USER_SESSION_NAME);
-        AppUser user = object == null ? null : (AppUser) object;
-        return user;
+    public void setUserLoginStatusService(UserLoginStatusService userLoginStatusService) {
+        this.userLoginStatusService = userLoginStatusService;
     }
+
+    /**
+     * 返回用户基本信息
+     *
+     * @param request
+     * @return
+     */
+    public AppUser getUserInfo(HttpServletRequest request) {
+        long userId = userLoginStatusService.getUserIdFromLoginStatus(request);
+        return userService.get(userId);
+    }
+
 
     /**
      * 发送json消息
@@ -158,6 +168,55 @@ public class BaseController {
         }
         model.addAttribute("instanceList", instanceList);
         model.addAttribute("instanceStatsMap", instanceStatsMap);
+    }
+    
+    /**
+     * 应用机器实例分布图
+     * @param appId
+     * @param model
+     */
+    protected void fillAppMachineInstanceTopology(Long appId, Model model) {
+        List<InstanceInfo> instanceList = appService.getAppInstanceInfo(appId);
+        int groupId = 1;
+        // 1.分组，同一个主从在一组
+        for (int i = 0; i < instanceList.size(); i++) {
+            InstanceInfo instance = instanceList.get(i);
+            // 有了groupId，不再设置
+            if (instance.getGroupId() > 0) {
+                continue;
+            }
+            if (instance.isOffline()) {
+                continue;
+            }
+            for (int j = i + 1; j < instanceList.size(); j++) {
+                InstanceInfo instanceCompare = instanceList.get(j);
+                if (instanceCompare.isOffline()) {
+                    continue;
+                }
+                // 寻找主从对应关系
+                if (instanceCompare.getMasterInstanceId() == instance.getId()
+                        || instance.getMasterInstanceId() == instanceCompare.getId()) {
+                    instanceCompare.setGroupId(groupId);
+                }
+            }
+            instance.setGroupId(groupId++);
+        }
+
+        // 2.机器下的实例列表
+        Map<String, List<InstanceInfo>> machineInstanceMap = new HashMap<String, List<InstanceInfo>>();
+        for (InstanceInfo instance : instanceList) {
+            String ip = instance.getIp();
+            if (machineInstanceMap.containsKey(ip)) {
+                machineInstanceMap.get(ip).add(instance);
+            } else {
+                List<InstanceInfo> tempInstanceList = new ArrayList<InstanceInfo>();
+                tempInstanceList.add(instance);
+                machineInstanceMap.put(ip, tempInstanceList);
+            }
+        }
+
+        model.addAttribute("machineInstanceMap", machineInstanceMap);
+        model.addAttribute("instancePairCount", groupId - 1);
     }
 
 }

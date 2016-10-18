@@ -2,17 +2,21 @@ package com.sohu.cache.web.controller;
 
 import com.sohu.cache.web.enums.RedisOperateEnum;
 import com.sohu.cache.constant.AppCheckEnum;
+import com.sohu.cache.constant.DataFormatCheckResult;
+import com.sohu.cache.constant.ErrorMessageEnum;
 import com.sohu.cache.entity.*;
 import com.sohu.cache.machine.MachineCenter;
 import com.sohu.cache.redis.RedisCenter;
 import com.sohu.cache.redis.RedisDeployCenter;
 import com.sohu.cache.redis.ReshardProcess;
+import com.sohu.cache.stats.app.AppDailyDataCenter;
 import com.sohu.cache.stats.app.AppDeployCenter;
 import com.sohu.cache.stats.instance.InstanceDeployCenter;
 import com.sohu.cache.util.ConstUtils;
 import com.sohu.cache.util.TypeUtil;
 import com.sohu.cache.web.enums.SuccessEnum;
 import com.sohu.cache.web.util.AppEmailUtil;
+import com.sohu.cache.web.util.DateUtil;
 
 import net.sf.json.JSONArray;
 
@@ -20,6 +24,7 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.math.NumberUtils;
+import org.apache.commons.lang.time.DateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
@@ -31,6 +36,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import java.text.ParseException;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentMap;
@@ -65,6 +71,38 @@ public class AppManageController extends BaseController {
 	@Resource(name = "instanceDeployCenter")
 	private InstanceDeployCenter instanceDeployCenter;
 
+	@Resource(name = "appDailyDataCenter")
+    private AppDailyDataCenter appDailyDataCenter;
+	
+	@RequestMapping("/appDaily")
+    public ModelAndView appDaily(HttpServletRequest request, HttpServletResponse response, Model model) throws ParseException {
+	    AppUser userInfo = getUserInfo(request);
+        logger.warn("user {} want to send appdaily", userInfo.getName());
+        if (ConstUtils.SUPER_MANAGER.contains(userInfo.getName())) {
+            Date startDate;
+            Date endDate;
+            String startDateParam = request.getParameter("startDate");
+            String endDateParam = request.getParameter("endDate");
+            if (StringUtils.isBlank(startDateParam) || StringUtils.isBlank(endDateParam)) {
+                endDate = new Date();
+                startDate = DateUtils.addDays(endDate, -1);
+            } else {
+                startDate = DateUtil.parseYYYY_MM_dd(startDateParam);
+                endDate = DateUtil.parseYYYY_MM_dd(endDateParam);
+            }
+            long appId = NumberUtils.toLong(request.getParameter("appId"));
+            if (appId > 0) {
+                appDailyDataCenter.sendAppDailyEmail(appId, startDate, endDate);
+            } else {
+                appDailyDataCenter.sendAppDailyEmail();
+            }
+            model.addAttribute("msg", "success!");
+        } else {
+            model.addAttribute("msg", "no power!");
+        }
+        return new ModelAndView("");
+    }
+	
 	/**
 	 * 审核列表
 	 * 
@@ -184,7 +222,7 @@ public class AppManageController extends BaseController {
 			HttpServletResponse response, Model model, String masterSizeSlave,
 			Long appAuditId) {
 	    AppUser appUser = getUserInfo(request);
-        logger.warn("user {} addAppClusterSharding:{}, result is {}", appUser.getName(), masterSizeSlave);
+        logger.warn("user {} addAppClusterSharding:{}", appUser.getName(), masterSizeSlave);
 		boolean isAdd = false;
 		if (StringUtils.isNotBlank(masterSizeSlave) && appAuditId != null) {
 			AppAudit appAudit = appService.getAppAuditById(appAuditId);
@@ -347,9 +385,12 @@ public class AppManageController extends BaseController {
 		// 实例所在机器信息
         fillAppMachineStat(appAudit.getAppId(), model);
 
-		model.addAttribute("appAuditId", appAuditId);
+		long appId = appAudit.getAppId();
+		AppDesc appDesc = appService.getByAppId(appId);
+        model.addAttribute("appAuditId", appAuditId);
 		model.addAttribute("appId", appAudit.getAppId());
-
+        model.addAttribute("appDesc", appDesc);
+		
 		return new ModelAndView("manage/appAudit/initAppScaleApply");
 	}
 
@@ -401,6 +442,25 @@ public class AppManageController extends BaseController {
 
 		return new ModelAndView("manage/appAudit/initAppDeploy");
 	}
+	
+	/**
+     * 应用部署配置检查
+     * @return
+     */
+    @RequestMapping(value = "/appDeployCheck")
+    public ModelAndView doAppDeployCheck(HttpServletRequest request, HttpServletResponse response, Model model, String appDeployText,
+            Long appAuditId) {
+        DataFormatCheckResult dataFormatCheckResult = null;
+        try {
+            dataFormatCheckResult = appDeployCenter.checkAppDeployDetail(appAuditId, appDeployText);
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            dataFormatCheckResult = DataFormatCheckResult.fail(ErrorMessageEnum.INNER_ERROR_MSG.getMessage());
+        }
+        model.addAttribute("status", dataFormatCheckResult.getStatus());
+        model.addAttribute("message", dataFormatCheckResult.getMessage());
+        return new ModelAndView("");
+    }
 
 	/**
 	 * 添加应用部署
@@ -424,7 +484,8 @@ public class AppManageController extends BaseController {
 			logger.error("appDeploy error param: appDeployText={},appAuditId:{}", appDeployText, appAuditId);
 		}
         logger.warn("user {} appDeploy: appDeployText={},appAuditId:{}, result is {}", appUser.getName(), appDeployText, appAuditId, isSuccess);
-		return new ModelAndView("redirect:/manage/app/auditList");
+        model.addAttribute("status", isSuccess ? 1 : 0);
+        return new ModelAndView("");
 	}
 
 	/**

@@ -59,7 +59,7 @@
 	                alert("执行成功!");
 	            	$("#redisClusterFailOverInfo" + instanceId).html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Success!</strong>执行成功，应用的拓扑结构要1分钟之后生效，请耐心等待</div>");
 	                var targetId = "#redisClusterFailOverModal" + instanceId;
-	            	setTimeout("$('" + targetId +"').modal('hide');reloadAppInstancesPage("+appId+");",1000);
+	            	setTimeout("$('" + targetId +"').modal('hide');window.location.reload();",1000);
 	            }else{
 	            	redisClusterFailOverBtn.disabled = false;
 	                $("#redisClusterFailOverInfo" + instanceId).html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Error!</strong>执行失败，请查找原因！</div>");
@@ -89,7 +89,7 @@
 	                alert("执行成功!");
 	            	$("#redisClusterAddSlaveInfo" + instanceId).html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Success!</strong>添加成功!</div>");
 	                var targetId = "#redisClusterAddSlaveModal" + instanceId;
-	                setTimeout("$('" + targetId +"').modal('hide');reloadAppInstancesPage("+appId+");",1000);
+	                setTimeout("$('" + targetId +"').modal('hide');window.location.reload();",1000);
 	            }else{
 	            	redisClusterAddSlaveBtn.disabled = false;
 	                $("#redisClusterAddSlaveInfo" + instanceId).html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Error!</strong>执行失败，请查找原因！</div>");
@@ -119,7 +119,7 @@
 	                alert("执行成功!");
 	            	$("#redisSentinelAddSlaveInfo" + instanceId).html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Success!</strong>添加成功!</div>");
 	                var targetId = "#redisSentinelAddSlaveModal" + instanceId;
-	                setTimeout("$('" + targetId +"').modal('hide');reloadAppInstancesPage("+appId+");",1000);
+	                setTimeout("$('" + targetId +"').modal('hide');window.location.reload();",1000);
 	            }else{
 	            	redisSentinelAddSlaveBtn.disabled = false;
 	                $("#redisSentinelAddSlaveInfo" + instanceId).html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Error!</strong>执行失败，请查找原因！</div>");
@@ -142,7 +142,7 @@
 	                alert("执行成功!");
 	            	$("#redisSentinelFailOverInfo").html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Success!</strong>执行成功，应用的拓扑结构要1分钟之后生效，请耐心等待</div>");
 	                var targetId = "#redisSentinelFailOverModal";
-	            	setTimeout("$('" + targetId +"').modal('hide');reloadAppInstancesPage("+appId+");",1000);
+	            	setTimeout("$('" + targetId +"').modal('hide');window.location.reload();",1000);
 	            }else{
 	            	redisSentinelFailOverBtn.disabled = false;
 	                $("#redisSentinelFailOverInfo").html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Error!</strong>执行失败，请查找原因！</div>");
@@ -171,7 +171,7 @@
 	            	}
 	            	$("#redisAddFailSlotsMasterInfo" + instanceId).html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Success!</strong>执行成功，应用的拓扑结构要1分钟之后生效，请耐心等待</div>");
 	                var targetId = "#redisAddFailSlotsMasterModal" + instanceId;
-	            	setTimeout("$('" + targetId +"').modal('hide');reloadAppInstancesPage("+appId+");",1000);
+	            	setTimeout("$('" + targetId +"').modal('hide');window.location.reload();",1000);
 	            } else{
 	            	redisAddFailSlotsMasterBtn.disabled = false;
 	                $("#redisAddFailSlotsMasterInfo" + instanceId).html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Error!</strong>执行失败，请查找原因！</div>");
@@ -200,18 +200,13 @@
 	                alert("执行成功!");
 	            	$("#redisAddSentinelInfo").html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Success!</strong>添加成功!</div>");
 	                var targetId = "#redisAddSentinelModal";
-	                setTimeout("$('" + targetId +"').modal('hide');reloadAppInstancesPage("+appId+");",1000);
+	                setTimeout("$('" + targetId +"').modal('hide');window.location.reload();",1000);
 	            }else{
 	            	redisAddSentinelBtn.disabled = false;
 	                $("#redisAddSentinelInfo").html("<div class='alert alert-error' ><button class='close' data-dismiss='alert'>×</button><strong>Error!</strong>执行失败，请查找原因！</div>");
 	            }
 	        }
 	     );
-	}
-	
-	//重新加载appDetail页面
-	function reloadAppInstancesPage(appId){
-		location.href = "/manage/app/index.do?appId=" + appId + "#app_ops_instance";
 	}
 	
 </script>
@@ -245,6 +240,8 @@
 	                <th>对象数</th>
 	                <th>连接数</th>
 	                <th>命中率</th>
+	                <th>碎片率</th>
+	                <th>AOF阻塞数</th>
 	                <th>日志</th>
 	                <th>操作</th>
 	            </tr>
@@ -253,7 +250,8 @@
 	            <c:forEach var="instance" items="${instanceList}" varStatus="status">
 	            	<c:set var="instanceStatsMapKey" value="${instance.ip}:${instance.port}"></c:set>
 	                <tr>
-	                    <td><a href="/admin/instance/index.do?instanceId=${instance.id}" target="_blank">${instance.id}</a>
+	                    <td>
+	                    	 <a href="/admin/instance/index.do?instanceId=${instance.id}" target="_blank">${instance.id}</a>
 	                    </td>
 	                    <td>${instance.ip}:${instance.port}</td>
 	                    <td>${instance.statusDesc}</td>
@@ -272,32 +270,23 @@
                             <div class="progress margin-custom-bottom0">
                             	<c:choose>
                                 	<c:when test="${(instanceStatsMap[instanceStatsMapKey]).memUsePercent >= 80}">
-		                                <div class="progress-bar progress-bar-danger"
-		                                     role="progressbar"
-		                                     aria-valuenow="${(instanceStatsMap[instanceStatsMapKey]).memUsePercent}"
-		                                     aria-valuemax="100"
-		                                     aria-valuemin="0"
-		                                     style="width: ${(instanceStatsMap[instanceStatsMapKey]).memUsePercent}%">
-		                                     
-		                                	<label style="color: #000000">
-			                                   <fmt:formatNumber value="${(instanceStatsMap[instanceStatsMapKey]).usedMemory / 1024 / 1024 / 1024}" pattern="0.00"/>G&nbsp;&nbsp;Used/<fmt:formatNumber value="${(instanceStatsMap[instanceStatsMapKey]).maxMemory / 1024 / 1024 / 1024}" pattern="0.00"/>G&nbsp;&nbsp;Total
-			                               	</label>
-	                                     </div>
+										<c:set var="progressBarStatus" value="progress-bar-danger"/>
                                     </c:when>
                                     <c:otherwise>
-	                                    <div class="progress-bar progress-bar-success"
-	                                         role="progressbar"
-	                                         aria-valuenow="${(instanceStatsMap[instanceStatsMapKey]).memUsePercent}"
-	                                         aria-valuemax="100"
-	                                         aria-valuemin="0"
-	                                         style="width: ${(instanceStatsMap[instanceStatsMapKey]).memUsePercent}%">
-	                                         
-	                                     	<label style="color: #000000">
-			                                   <fmt:formatNumber value="${(instanceStatsMap[instanceStatsMapKey]).usedMemory / 1024 / 1024 / 1024}" pattern="0.00"/>G&nbsp;&nbsp;Used/<fmt:formatNumber value="${(instanceStatsMap[instanceStatsMapKey]).maxMemory / 1024 / 1024 / 1024}" pattern="0.00"/>G&nbsp;&nbsp;Total
-			                               	</label>
-	                                     </div>
+                                    	<c:set var="progressBarStatus" value="progress-bar-success"/>
                                     </c:otherwise>
                                </c:choose>
+                               <div class="progress-bar ${progressBarStatus}"
+                                    role="progressbar"
+                                    aria-valuenow="${(instanceStatsMap[instanceStatsMapKey]).memUsePercent}"
+                                    aria-valuemax="100"
+                                    aria-valuemin="0"
+                                    style="width: ${(instanceStatsMap[instanceStatsMapKey]).memUsePercent}%">
+                                    
+                                	<label style="color: #000000">
+	                                	<fmt:formatNumber value="${(instanceStatsMap[instanceStatsMapKey]).usedMemory / 1024 / 1024 / 1024}" pattern="0.00"/>G&nbsp;&nbsp;Used/<fmt:formatNumber value="${(instanceStatsMap[instanceStatsMapKey]).maxMemory / 1024 / 1024 / 1024}" pattern="0.00"/>G&nbsp;&nbsp;Total
+	                            	</label>
+                                </div>
                             </div>
 	                    </td>
 	                    <td>
@@ -305,6 +294,22 @@
 	                    </td>
 	                    <td>${(instanceStatsMap[instanceStatsMapKey]).currConnections}</td>
 	                    <td>${(instanceStatsMap[instanceStatsMapKey]).hitPercent}</td>
+	                    <td>
+		                  <c:set var="memFragmentationRatio" value="${(instanceStatsMap[instanceStatsMapKey]).memFragmentationRatio}"/>
+		                  <c:choose>
+		                		<c:when test="${memFragmentationRatio > 5 && (instanceStatsMap[instanceStatsMapKey]).usedMemory > 1024 * 1024 * 100}">
+		                			  <c:set var="memFragmentationRatioLabel" value="label-danger"/>
+		                		</c:when>
+		                		<c:when test="${memFragmentationRatio >= 3 && memFragmentationRatio < 5 && (instanceStatsMap[instanceStatsMapKey]).usedMemory > 1024 * 1024 * 100}">
+		                			  <c:set var="memFragmentationRatioLabel" value="label-warning"/>
+		                		</c:when>
+		                		<c:otherwise>
+		                			  <c:set var="memFragmentationRatioLabel" value="label-success"/>
+		                 		</c:otherwise>
+		                  </c:choose>
+		                  <label class="label ${memFragmentationRatioLabel}">${memFragmentationRatio}</label>
+	                    </td>
+	                    <td>${(instanceStatsMap[instanceStatsMapKey]).aofDelayedFsync}</td>
 	                    <td>
 	                    	<a target="_blank" href="/manage/instance/log?instanceId=${instance.id}">查看</a>
 	                    </td>
@@ -333,7 +338,7 @@
                                      <button type="button" class="btn btn-small btn-danger" onclick="shutdownInstance('${instance.id}')">
                                         下线实例
                                      </button>
-                                       <c:if test="${instance.masterInstanceId == 0}">
+                                       <c:if test="${instance.masterInstanceId == 0 and instance.type != 5}">
                                            <button type="button" class="btn btn-small btn-primary" data-target="#redisClusterAddSlaveModal${instance.id}" data-toggle="modal">添加Slave</button>
                                        </c:if>
                                        <c:if test="${instance.masterInstanceId > 0 and instance.type == 2}">
